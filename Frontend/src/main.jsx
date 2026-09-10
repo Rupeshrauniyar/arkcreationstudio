@@ -284,7 +284,72 @@ function SectionHeader({ index, eyebrow, title, children }) {
   )
 }
 
-function WorkCard({ work, index, active, setActive }) {
+function WorkThumb({ work }) {
+  const [src, setSrc] = useState(work.poster || work.thumbnail || '')
+  const [failed, setFailed] = useState(!src)
+
+  if (failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(255,94,0,.16),transparent_36%),#090909]">
+        <Play size={28} fill="currentColor" className="text-orange-400" />
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={src}
+      alt={`${work.title} preview`}
+      referrerPolicy="no-referrer"
+      className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+      onError={() => {
+        if (work.thumbnailFallback && src !== work.thumbnailFallback) setSrc(work.thumbnailFallback)
+        else setFailed(true)
+      }}
+    />
+  )
+}
+
+function WorkPlayer({ work, onClose }) {
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.__lenis?.stop()
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previous
+      window.__lenis?.start()
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md md:p-10" onClick={onClose}>
+      <button type="button" onClick={onClose} className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/50 text-white transition hover:border-orange-400/70 hover:bg-orange-500/10" aria-label="Close player">
+        <X size={18} />
+      </button>
+      <div className="relative aspect-video w-full max-w-5xl overflow-hidden border border-white/15 bg-black shadow-[0_0_80px_rgba(255,86,0,.18)]" onClick={(e) => e.stopPropagation()} data-lenis-prevent>
+        {work.type === 'drive' ? (
+          <iframe
+            key={work.fileId || work.embed}
+            title={work.title}
+            src={`${work.embed}${work.embed.includes('?') ? '&' : '?'}autoplay=1`}
+            className="h-full w-full border-0"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <video src={work.src} poster={work.poster} controls autoPlay playsInline className="h-full w-full object-contain" />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function WorkCard({ work, index, active, setActive, onPlay }) {
   const ref = useRef(null)
   useEffect(() => {
     const el = ref.current
@@ -295,38 +360,38 @@ function WorkCard({ work, index, active, setActive }) {
     return () => ctx.revert()
   }, [])
 
-  const isPlaceholder = work.type === 'drive' && work.embed.includes('YOUR_GOOGLE_DRIVE')
+  const isPlaceholder = work.type === 'drive' && String(work.embed || '').includes('YOUR_GOOGLE_DRIVE')
 
   return (
     <article ref={ref} className="group">
-      <div className="relative aspect-[16/10] overflow-hidden border border-white/10 bg-[#0a0a0a]">
+      <div className="relative aspect-[16/10] cursor-pointer overflow-hidden border border-white/10 bg-[#0a0a0a]" onClick={() => { if (!isPlaceholder) onPlay(work) }}>
         <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_50%_45%,rgba(255,95,0,.14),transparent_45%)] opacity-80 transition duration-700 group-hover:opacity-100" />
         {isPlaceholder ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_50%_42%,rgba(255,94,0,.14),transparent_34%),#090909] text-center">
             <span className="font-display text-[12px] font-semibold tracking-[0.2em] text-orange-400">YOUR WORK GOES HERE</span>
             <span className="max-w-xs px-6 text-[10px] uppercase tracking-[0.14em] text-white/30">Add a Google Drive file ID / URL in src/data/works.js and it will appear automatically.</span>
           </div>
-        ) : work.type === 'drive' ? (
-          <iframe title={work.title} src={work.embed} className="h-full w-full border-0 object-cover transition duration-700 group-hover:scale-[1.04]" allow=" encrypted-media; fullscreen; picture-in-picture" />
         ) : (
-          <video src={work.src} poster={work.poster} muted loop playsInline  className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]" />
+          <WorkThumb work={work} />
         )}
 
         <div className="absolute inset-x-4 bottom-4 z-20 flex items-end justify-between">
           <div className="bg-black/45 px-2.5 py-2 text-[9px] tracking-[0.16em] text-white/70 backdrop-blur-xl">{work.number}</div>
-          <button onClick={() => setActive(active === index ? null : index)} className="grid h-11 w-11 place-items-center rounded-full border border-white/25 bg-black/35 text-white backdrop-blur-xl transition hover:border-orange-400/70 hover:bg-orange-500/10" aria-label={`Show description for ${work.title}`}>
-            <Play size={15} fill="currentColor" />
-          </button>
+          {!isPlaceholder && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onPlay(work) }} className="grid h-11 w-11 place-items-center rounded-full border border-white/25 bg-black/35 text-white backdrop-blur-xl transition hover:border-orange-400/70 hover:bg-orange-500/10" aria-label={`Play ${work.title}`}>
+              <Play size={15} fill="currentColor" />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex items-start justify-between gap-4 border-b border-white/10 py-4">
+      <button type="button" onClick={() => setActive(active === index ? null : index)} className="flex w-full items-start justify-between gap-4 border-b border-white/10 py-4 text-left">
         <div>
           <div className="text-[9px] font-semibold tracking-[0.17em] text-orange-400">{work.category}</div>
           <h3 className="mt-1.5 font-display text-xl tracking-[-0.03em] text-white md:text-2xl">{work.title}</h3>
         </div>
         <ArrowUpRight size={19} className="mt-1 text-white/40 transition group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-orange-400" />
-      </div>
+      </button>
 
       <div className={`overflow-hidden transition-all duration-500 ${active === index ? 'max-h-28 opacity-100' : 'max-h-0 opacity-0'}`}>
         <p className="max-w-xl pt-3 text-[12px] leading-5 text-white/45">{work.description}</p>
@@ -337,6 +402,7 @@ function WorkCard({ work, index, active, setActive }) {
 
 function Work() {
   const [active, setActive] = useState(null)
+  const [playing, setPlaying] = useState(null)
   return (
     <section id="work" className="bg-[#050505] px-6 py-24 md:px-[5vw] md:py-32">
       <div className="mx-auto max-w-[1700px]">
@@ -344,9 +410,10 @@ function Work() {
           <p>Here is where your strongest projects become the proof. Add Google Drive links to the portfolio array and ARK automatically turns them into a visual case-study wall.</p>
         </SectionHeader>
         <div className="grid gap-12 md:grid-cols-2 md:gap-x-6 md:gap-y-20">
-          {works.map((work, i) => <WorkCard key={work.id} work={work} index={i} active={active} setActive={setActive} />)}
+          {works.map((work, i) => <WorkCard key={work.id} work={work} index={i} active={active} setActive={setActive} onPlay={setPlaying} />)}
         </div>
       </div>
+      {playing ? <WorkPlayer work={playing} onClose={() => setPlaying(null)} /> : null}
     </section>
   )
 }
@@ -515,6 +582,7 @@ function App() {
     window.addEventListener('pointermove', move, { passive: true })
 
     const lenis = new Lenis({ lerp: 0.08, smoothWheel: true })
+    window.__lenis = lenis
     let rafId
     const raf = (time) => {
       lenis.raf(time)
@@ -524,6 +592,7 @@ function App() {
 
     return () => {
       cancelAnimationFrame(rafId)
+      if (window.__lenis === lenis) window.__lenis = null
       lenis.destroy()
       window.removeEventListener('pointermove', move)
       glow.remove()
